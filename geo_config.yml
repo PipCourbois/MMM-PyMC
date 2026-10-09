@@ -1,0 +1,346 @@
+# GEO MODEL Configuration File - MULTIDIMENSIONAL MMM
+# Configuration for geo_model.ipynb with hierarchical modeling across geographies
+# Based on mmm_config_simu.yml structure but adapted for multidimensional data
+
+# ============================================================================
+# DATA SOURCE (PRIORITY #1 - Define once, reference everywhere)
+# ============================================================================
+# Using YAML anchor (&data_source) to define the source path once
+# This value is referenced below using alias (*data_source) in the data section
+source: &data_source "data/test_geo_model_dataset.csv"
+
+# ============================================================================
+# MODEL CONFIGURATION
+# ============================================================================
+model:
+  # Adstock transformation parameters
+  adstock:
+    type: "GeometricAdstock"  # Options: "GeometricAdstock", "NoAdstock"
+    l_max: 8  # Maximum lag in weeks
+
+  # Saturation transformation parameters
+  saturation:
+    type: "NoSaturation"  # Options: "LogisticSaturation", "NoSaturation"
+
+  # Seasonality configuration
+  seasonality:
+    yearly_seasonality: 2  # Number of Fourier terms for yearly seasonality
+
+  # Time-varying parameters
+  time_varying:
+    intercept: false
+    media: false
+
+  # Scaling configuration
+  apply_scaling: true  # Enable scaling for multidimensional model
+
+  # Scaling method
+  scaling:
+    channel:
+      method: "max"  # Scale channels by max value
+      dims: []  # Empty list = scale across all dimensions
+    target:
+      method: "max"  # Scale target by max value
+      dims: []  # Empty list = scale across all dimensions
+
+  # Intercept configuration
+  fit_intercept: true  # Include intercept in the model
+
+  # Data validation
+  validate_data: true
+
+  # Log transformation configuration
+  # Specify which variable CATEGORIES to apply log(x+1) transformation
+  # NOTE: Use category names ("target", "channels"), NOT individual column names
+  log_transformation:
+    - "target"
+    - "channels"
+
+# ============================================================================
+# DATA CONFIGURATION
+# ============================================================================
+data:
+  # Reference to source defined at top (using YAML alias - no duplication!)
+  source: *data_source
+
+  # Column names in the dataset
+  columns:
+    date_column: "date"
+    target_column: "NetGMV"
+    dimension_column: "Groups"  # The column that defines geographies/brands
+
+    # CHANNELS: All channel parameters defined inline
+    # For geo model, channels are the same across all geographies
+    # but parameters can be pooled/unpooled via priors
+    channels:
+      - name: "Spend_channel_1"
+        spend_column: "Spend_channel_1"
+        type: "paid"
+        pooling: "unpooled"  # unpooled, pooled, or hierarchical
+
+      - name: "Spend_channel_2"
+        spend_column: "Spend_channel_2"
+        type: "paid"
+        pooling: "unpooled"
+
+    # UNPAID CHANNELS (if any)
+    # These are channels that don't have spend associated
+    unpaid_channels:
+      - name: "Unpaid_visits"
+        column: "Unpaid_visits"
+        type: "unpaid"
+
+      - name: "Paid_visits"
+        column: "Paid_visits"
+        type: "unpaid"
+
+    # CONTROLS: All control parameters defined inline
+    controls:
+      - name: "event_1"
+        pooling: "pooled"  # Controls typically pooled across geos
+
+      - name: "event_2"
+        pooling: "pooled"
+
+# ============================================================================
+# PRIOR CONFIGURATION
+# ============================================================================
+# For multidimensional models, priors can specify pooling strategy via dims parameter
+priors:
+  # Saturation beta prior - HIERARCHICAL across geographies
+  # Using LogNormalPrior with per-channel hyperpriors
+  saturation_beta:
+    type: "LogNormalPrior"
+    mean:
+      distribution: "Gamma"
+      mu: 0.25
+      sigma: 0.10
+      dims: ["channel"]  # Per channel hyperprior
+    std:
+      distribution: "Exponential"
+      scale: 0.10
+      dims: ["channel"]
+    dims: ["channel", "Groups"]  # Hierarchical: varies by channel AND geo
+    centered: false
+
+  # Saturation lambda - FULLY POOLED across geographies (only per channel)
+  saturation_lam:
+    distribution: "Gamma"
+    mu: 0.5
+    sigma: 0.25
+    dims: ["channel"]  # Only varies by channel, not by geo
+
+  # Adstock alpha - UNPOOLED per geography AND channel
+  adstock_alpha:
+    distribution: "Beta"
+    alpha: 2
+    beta: 5
+    dims: ["Groups", "channel"]  # Fully unpooled
+
+  # Intercept prior - varies by geography
+  intercept:
+    distribution: "Gamma"
+    mu: 0.5
+    sigma: 0.25
+    dims: ["Groups"]  # Different intercept per geo
+
+  # Gamma control - pooled across geographies
+  gamma_control:
+    distribution: "Normal"
+    mu: 0
+    sigma: 0.5
+    dims: ["control"]  # Only varies by control variable, not geo
+
+  # Gamma fourier prior (for seasonality) - varies by geography
+  gamma_fourier:
+    distribution: "Normal"
+    mu: 0
+    sigma: 0.2
+    dims: ["Groups", "fourier_mode"]  # Different seasonality per geo
+
+  # Likelihood prior - varies by date and geography
+  likelihood:
+    distribution: "TruncatedNormal"
+    lower: 0
+    sigma:
+      distribution: "HalfNormal"
+      sigma: 1.5
+    dims: ["date", "Groups"]
+
+# ============================================================================
+# SAMPLING CONFIGURATION
+# ============================================================================
+sampling:
+  # Random seed for reproducibility
+  random_seed: 327  # sum(map(ord, "mmm"))
+
+  # Prior predictive sampling
+  prior_predictive:
+    samples: 300
+    var_names: ["y_original_scale"]
+
+  # MCMC sampling parameters
+  mcmc:
+    chains: 4
+    target_accept: 0.95
+    nuts_sampler: "numpyro"  # Options: "numpyro", "nutpie", "blackjax", "pymc"
+
+  # Posterior predictive sampling
+  posterior_predictive:
+    var_names: ["y_original_scale"]
+
+  # Sampler UI configuration
+  progressbar: true
+
+# ============================================================================
+# VISUALIZATION CONFIGURATION
+# ============================================================================
+visualization:
+  # Figure parameters
+  figure:
+    figsize: [12, 7]
+    dpi: 100
+
+  # Plot style
+  style: "arviz-darkgrid"
+
+  # Backend configuration
+  backend:
+    format: "retina"
+
+  # Dimension labels (for plots)
+  # If not specified, will use actual values from data (e.g., "Brand_A", "Brand_B")
+  # Set custom labels here to override in plots
+  dimension_labels:
+    override: null  # Set to a string like "NORTH REGION" to use same label for all geos
+    # Or leave as null to use automatic labels from data
+
+  # Confidence intervals for ROAS plots
+  confidence_intervals:
+    - 0.85
+    - 0.90
+
+  # Time series confidence levels
+  time_series_confidence:
+    - 0.95
+    - 0.99
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+logging:
+  # Master switch: Set to false to disable ALL logs
+  enabled: false
+
+  # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"
+
+  # Log format
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Date format
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+  # Specific logger for MMM module
+  mmm_logger:
+    name: "pymc_marketing.mmm.mmm.MMM"
+    level: "INFO"
+
+# ============================================================================
+# ANALYSIS CONFIGURATION
+# ============================================================================
+analysis:
+  # Baseline components configuration
+  # These components are grouped together in contribution plots
+  baseline_components:
+    - "intercept"
+    - "seasonality"
+
+  # ROAS calculation settings
+  roas:
+    # Which channels are paid (have spend associated)
+    paid_channels:
+      - "Spend_channel_1"
+      - "Spend_channel_2"
+
+    # Mapping from channel name to spend column
+    # For channels where they differ (e.g., visits vs spend)
+    spend_mapping:
+      Spend_channel_1: "Spend_channel_1"
+      Spend_channel_2: "Spend_channel_2"
+
+  # Marginal ROAS settings
+  marginal_roas:
+    marginal_increase: 0.01  # 1% increase for marginal ROAS calculation
+
+  # Response curve analysis
+  response_curves:
+    # Define spend levels to test (as multiples of current spend)
+    start: 0
+    stop: 1.5
+    num: 12
+    absolute_xrange: true
+
+# ============================================================================
+# DIMENSIONS CONFIGURATION
+# ============================================================================
+# Multidimensional model specific settings
+dimensions:
+  # Primary dimension (geography, brand, etc.)
+  primary: "Groups"
+
+  # Expected dimension values (optional - for validation)
+  # Leave empty to auto-detect from data
+  expected_values: []  # e.g., ["Brand_A", "Brand_B"]
+
+  # Pooling strategy defaults
+  # Can be overridden per parameter in priors section
+  pooling:
+    default_strategy: "hierarchical"  # Options: "pooled", "unpooled", "hierarchical"
+
+    # Which parameters should be pooled by default
+    pooled_params: ["gamma_control"]
+
+    # Which parameters should be unpooled by default
+    unpooled_params: ["adstock_alpha"]
+
+    # Which parameters should use hierarchical pooling
+    hierarchical_params: ["saturation_beta", "intercept", "gamma_fourier"]
+
+# ============================================================================
+# ORIGINAL SCALE CONTRIBUTIONS
+# ============================================================================
+# Variables to compute in original scale (before transformations)
+original_scale_vars:
+  - "channel_contribution"
+  - "control_contribution"
+  - "intercept_contribution"
+  - "yearly_seasonality_contribution"
+
+# ============================================================================
+# DIAGNOSTICS CONFIGURATION
+# ============================================================================
+diagnostics:
+  # Variables to include in trace plots and summary
+  trace_vars:
+    - "adstock_alpha"
+    - "gamma_control"
+    - "gamma_fourier"
+    - "intercept_contribution"
+    - "saturation_beta"
+    - "saturation_beta_mean"  # Only if using hierarchical
+    - "saturation_beta_std"   # Only if using hierarchical
+    - "saturation_lam"
+    - "y_sigma"
+
+  # Summary statistics
+  summary:
+    include_vars: "trace_vars"  # Reference to trace_vars above
+    round: 4
+
+  # Convergence checks
+  convergence:
+    check_divergences: true
+    max_divergences: 0
+    min_ess: 400  # Minimum effective sample size
+    max_rhat: 1.01  # Maximum R-hat value

@@ -1,0 +1,146 @@
+# MMM Tutorial Configuration File
+# This file contains all configurable parameters for the Media Mix Modeling tutorial
+
+# ============================================================================
+# DATA CONFIGURATION
+# ============================================================================
+data:
+  # URL or local path to the data file
+  source: "https://raw.githubusercontent.com/pymc-labs/pymc-marketing/main/data/mmm_example.csv"
+
+  # Column names in the dataset
+  columns:
+    date_column: "date_week"
+    target_column: "y"
+    channel_columns:
+      - "x1"
+      - "x2"
+    control_columns:
+      - "event_1"
+      - "event_2"
+      - "t"
+
+# ============================================================================
+# MODEL CONFIGURATION
+# ============================================================================
+model:
+  # Adstock transformation parameters
+  adstock:
+    type: "GeometricAdstock"
+    l_max: 8  # Maximum lag in weeks
+
+  # Saturation transformation parameters
+  saturation:
+    type: "LogisticSaturation"
+
+  # Seasonality configuration
+  seasonality:
+    yearly_seasonality: 2  # Number of Fourier terms for yearly seasonality
+
+  # Time-varying parameters
+  time_varying:
+    intercept: false
+    media: false
+
+  # Data validation
+  validate_data: true
+
+# ============================================================================
+# PRIOR CONFIGURATION
+# ============================================================================
+priors:
+  # Whether to use spend-share informed priors for channel contributions
+  use_spend_share_priors: true
+
+  # Prior multiplier for spend share (n_channels * spend_share)
+  spend_share_multiplier: 2  # Number of channels
+
+  # Intercept prior
+  intercept:
+    distribution: "Normal"
+    mu: 0.5
+    sigma: 0.2
+
+  # Gamma control prior (for control variables)
+  gamma_control:
+    distribution: "Normal"
+    mu: 0
+    sigma: 0.05
+
+  # Gamma fourier prior (for seasonality)
+  gamma_fourier:
+    distribution: "Laplace"
+    mu: 0
+    b: 0.2
+
+  # Likelihood prior
+  likelihood:
+    distribution: "Normal"
+    sigma:
+      distribution: "HalfNormal"
+      sigma: 6
+
+# ============================================================================
+# SAMPLING CONFIGURATION
+# ============================================================================
+sampling:
+  # Random seed for reproducibility
+  random_seed: 327  # sum(map(ord, "mmm"))
+
+  # Prior predictive sampling
+  prior_predictive:
+    samples: 1000
+
+  # MCMC sampling parameters
+  mcmc:
+    chains: 4
+    target_accept: 0.85
+    nuts_sampler: "numpyro"  # Options: "numpyro", "nutpie", "blackjax", "pymc"
+
+  # Sampler UI configuration
+  progressbar: true
+
+# ============================================================================
+# VISUALIZATION CONFIGURATION
+# ============================================================================
+visualization:
+  # Figure parameters
+  figure:
+    figsize: [12, 7]
+    dpi: 100
+
+  # Plot style
+  style: "arviz-darkgrid"
+
+  # Backend configuration
+  backend:
+    format: "retina"
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+logging:
+  # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"
+
+  # Log format
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Date format
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+  # Specific logger for MMM module
+  mmm_logger:
+    name: "pymc_marketing.mmm.mmm.MMM"
+    level: "INFO"
+
+# ============================================================================
+# ANALYSIS CONFIGURATION
+# ============================================================================
+analysis:
+  # Contribution grid analysis parameters
+  contribution_grid:
+    start: 0
+    stop: 1.5
+    num: 12
+    absolute_xrange: true

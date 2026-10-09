@@ -1,0 +1,225 @@
+# MMM Configuration File - HIERARCHICAL GEO MODEL
+# Generated from gen_geodata.ipynb
+
+# ============================================================================
+# DATA SOURCE
+# ============================================================================
+source: &data_source "data/df_mmm_simu_geo.csv"
+
+# ============================================================================
+# MODEL CONFIGURATION
+# ============================================================================
+model:
+  # HIERARCHICAL DIMENSION - This enables geographical hierarchical modeling
+  dims: ["geo"]  # Model will create separate parameters per geography
+
+  # Adstock transformation parameters
+  adstock:
+    type: "GeometricAdstock"
+    l_max: 8
+
+  # Saturation transformation parameters
+  saturation:
+    type: "NoSaturation"
+
+  # Seasonality configuration
+  seasonality:
+    yearly_seasonality: 2
+
+  # Time-varying parameters
+  time_varying:
+    intercept: false
+    media: false
+
+  # Scaling configuration
+  apply_scaling: false
+
+  # Intercept configuration
+  fit_intercept: true
+
+  # Data validation
+  validate_data: true
+
+  # Log transformation configuration
+  log_transformation:
+    - "target"
+    - "channels"
+
+# ============================================================================
+# DATA CONFIGURATION
+# ============================================================================
+data:
+  source: *data_source
+
+  columns:
+    date_column: "week_start_date"
+    target_column: "KPI"
+
+    # Dimension column for hierarchical modeling
+    dim_columns:
+      - "geo"
+
+    channels:
+      - name: "MV_Unpaid_1_visits"
+        spend_column: "MV_Unpaid_1_visits"
+        type: "unpaid"
+        adstock:
+          prior:
+            distribution: "Beta"
+            alpha: 2
+            beta: 2
+        saturation:
+          prior:
+            distribution: "TruncatedNormal"
+            mu: 0.5
+            sigma: 0.3
+            lower: 0.0
+            upper: 2.0
+
+      - name: "MV_Unpaid_2_visits"
+        spend_column: "MV_Unpaid_2_visits"
+        type: "unpaid"
+        adstock:
+          prior:
+            distribution: "Beta"
+            alpha: 1
+            beta: 3
+        saturation:
+          prior:
+            distribution: "TruncatedNormal"
+            mu: 0.6
+            sigma: 0.35
+            lower: 0.0
+            upper: 2.0
+
+      - name: "MV_Paid_1_visits"
+        spend_column: "MV_Paid_1_Spend"
+        type: "paid"
+        adstock:
+          prior:
+            distribution: "Beta"
+            alpha: 1
+            beta: 3
+        saturation:
+          prior:
+            distribution: "TruncatedNormal"
+            mu: 1.0
+            sigma: 0.5
+            lower: 0.0
+            upper: 5.0
+
+      - name: "MV_Paid_2_visits"
+        spend_column: "MV_Paid_2_Spend"
+        type: "paid"
+        adstock:
+          prior:
+            distribution: "Beta"
+            alpha: 1
+            beta: 3
+        saturation:
+          prior:
+            distribution: "TruncatedNormal"
+            mu: 1.1
+            sigma: 0.55
+            lower: 0.0
+            upper: 5.0
+
+    controls:
+      - name: "Control_1"
+        prior:
+          distribution: "Normal"
+          mu: 0
+          sigma: 0.05
+
+      - name: "Control_2"
+        prior:
+          distribution: "Normal"
+          mu: 0
+          sigma: 0.03
+
+      - name: "Holiday_Christmas"
+        prior:
+          distribution: "Normal"
+          mu: 0
+          sigma: 0.1
+
+# ============================================================================
+# PRIOR CONFIGURATION
+# ============================================================================
+priors:
+  # Intercept prior - WILL VARY BY GEO (hierarchical)
+  intercept:
+    distribution: "Normal"
+    mu: 0.5
+    sigma: 0.2
+    dims: "geo"  # Each geo gets its own intercept
+
+  # Gamma fourier prior (for seasonality)
+  gamma_fourier:
+    distribution: "Laplace"
+    mu: 0
+    b: 0.2
+
+  # Likelihood prior - WILL VARY BY GEO
+  likelihood:
+    distribution: "Normal"
+    sigma:
+      distribution: "HalfNormal"
+      sigma: 6
+      dims: "geo"  # Each geo gets its own noise level
+
+# ============================================================================
+# SAMPLING CONFIGURATION
+# ============================================================================
+sampling:
+  random_seed: 327
+
+  prior_predictive:
+    samples: 300
+
+  mcmc:
+    chains: 2
+    target_accept: 0.85
+    nuts_sampler: "numpyro"
+
+  progressbar: true
+
+# ============================================================================
+# VISUALIZATION CONFIGURATION
+# ============================================================================
+visualization:
+  figure:
+    figsize: [12, 7]
+    dpi: 100
+
+  style: "arviz-darkgrid"
+
+  backend:
+    format: "retina"
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+logging:
+  enabled: false
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+  mmm_logger:
+    name: "pymc_marketing.mmm.mmm.MMM"
+    level: "INFO"
+
+# ============================================================================
+# ANALYSIS CONFIGURATION
+# ============================================================================
+analysis:
+  contribution_grid:
+    start: 0
+    stop: 1.5
+    num: 12
+    absolute_xrange: true
+
+  baseline_components:
+    - "intercept"
+    - "seasonality"

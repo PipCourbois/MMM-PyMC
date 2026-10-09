@@ -1,0 +1,256 @@
+# MMM Tutorial Configuration File - INLINE PARAMETER STRUCTURE
+# All parameters for each variable (channel/control) are defined in one place
+
+# ============================================================================
+# DATA SOURCE (PRIORITY #1 - Define once, reference everywhere)
+# ============================================================================
+# Using YAML anchor (&data_source) to define the source path once
+# This value is referenced below using alias (*data_source) in the data section
+source: &data_source "data/df_mmm_simu.csv"
+
+# ============================================================================
+# MODEL CONFIGURATION
+# ============================================================================
+model:
+  # Adstock transformation parameters (global defaults)
+  adstock:
+    type: "GeometricAdstock"
+    l_max: 8  # Maximum lag in weeks
+
+  # Saturation transformation parameters (global defaults)
+  saturation:
+    type: "NoSaturation"
+
+  # Seasonality configuration
+  seasonality:
+    yearly_seasonality: 2  # Number of Fourier terms for yearly seasonality
+
+  # Time-varying parameters
+  time_varying:
+    intercept: false
+    media: false
+
+  # Scaling configuration
+  apply_scaling: false  # No scaling as requested
+
+  # Intercept configuration
+  fit_intercept: true  # Include intercept in the model
+
+  # Data validation
+  validate_data: true
+
+  # Log transformation configuration
+  # Specify which variable CATEGORIES to apply log(x+1) transformation
+  # NOTE: Use category names ("target", "channels"), NOT individual column names
+  # - "target": Applies log transformation to the target variable (KPI/y)
+  # - "channels": Applies log transformation to ALL channel variables
+  #   (no need to list each channel individually - just use "channels")
+  log_transformation:
+    - "target"
+    - "channels"
+
+
+
+# ============================================================================
+# DATA CONFIGURATION
+# ============================================================================
+data:
+  # Reference to source defined at top (using YAML alias - no duplication!)
+  source: *data_source
+
+  # Column names in the dataset
+  columns:
+    date_column: "week_start_date"
+    target_column: "KPI"
+
+    # CHANNELS: All channel parameters defined inline
+    # Each channel has: name, spend_column, type, and all priors
+    channels:
+      - name: "MV_Unpaid_1_visits"
+        spend_column: "MV_Unpaid_1_visits"  # Self-reference for unpaid channels
+        type: "unpaid"
+        adstock:
+          prior:
+            distribution: "Beta"
+            alpha: 2
+            beta: 2
+        saturation:
+          prior:
+            distribution: "TruncatedNormal"
+            mu: 0.5
+            sigma: 0.3
+            lower: 0.0
+            upper: 2.0
+
+      - name: "MV_Unpaid_2_visits"
+        spend_column: "MV_Unpaid_2_visits"
+        type: "unpaid"
+        adstock:
+          prior:
+            distribution: "Beta"
+            alpha: 1
+            beta: 3
+        saturation:
+          prior:
+            distribution: "TruncatedNormal"
+            mu: 0.6
+            sigma: 0.35
+            lower: 0.0
+            upper: 2.0
+
+      - name: "MV_Paid_1_visits"
+        spend_column: "MV_Paid_1_Spend"  # Different column for ROAS calculation
+        type: "paid"
+        adstock:
+          prior:
+            distribution: "Beta"
+            alpha: 1
+            beta: 3
+        saturation:
+          prior:
+            distribution: "TruncatedNormal"
+            mu: 1.0
+            sigma: 0.5
+            lower: 0.0
+            upper: 5.0
+
+      - name: "MV_Paid_2_visits"
+        spend_column: "MV_Paid_2_Spend"
+        type: "paid"
+        adstock:
+          prior:
+            distribution: "Beta"
+            alpha: 1
+            beta: 3
+        saturation:
+          prior:
+            distribution: "TruncatedNormal"
+            mu: 1.1
+            sigma: 0.55
+            lower: 0.0
+            upper: 5.0
+
+    # CONTROLS: All control parameters defined inline
+    # Each control has: name and prior
+    controls:
+      - name: "Control_1"
+        prior:
+          distribution: "Normal"
+          mu: 0
+          sigma: 0.05
+
+      - name: "Control_2"
+        prior:
+          distribution: "Normal"
+          mu: 0
+          sigma: 0.03
+
+      - name: "Holiday_Christmas"
+        prior:
+          distribution: "Normal"
+          mu: 0
+          sigma: 0.1
+
+
+
+# ============================================================================
+# PRIOR CONFIGURATION (Global Priors Only)
+# ============================================================================
+# Note: Channel and control priors are now defined inline above
+priors:
+  # Intercept prior
+  intercept:
+    distribution: "Normal"
+    mu: 0.5
+    sigma: 0.2
+
+  # Gamma fourier prior (for seasonality)
+  gamma_fourier:
+    distribution: "Laplace"
+    mu: 0
+    b: 0.2
+
+  # Likelihood prior
+  likelihood:
+    distribution: "Normal"
+    sigma:
+      distribution: "HalfNormal"
+      sigma: 6
+
+
+# ============================================================================
+# SAMPLING CONFIGURATION
+# ============================================================================
+sampling:
+  # Random seed for reproducibility
+  random_seed: 327  # sum(map(ord, "mmm"))
+
+  # Prior predictive sampling
+  prior_predictive:
+    samples: 300
+
+  # MCMC sampling parameters
+  mcmc:
+    chains: 2
+    target_accept: 0.85
+    nuts_sampler: "numpyro"  # Options: "numpyro", "nutpie", "blackjax", "pymc"
+
+  # Sampler UI configuration
+  progressbar: true
+
+# ============================================================================
+# VISUALIZATION CONFIGURATION
+# ============================================================================
+visualization:
+  # Figure parameters
+  figure:
+    figsize: [12, 7]
+    dpi: 100
+
+  # Plot style
+  style: "arviz-darkgrid"
+
+  # Backend configuration
+  backend:
+    format: "retina"
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+logging:
+  # Master switch: Set to false to disable ALL logs (print statements converted to logger)
+  enabled: false
+
+  # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"
+
+  # Log format
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Date format
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+  # Specific logger for MMM module
+  mmm_logger:
+    name: "pymc_marketing.mmm.mmm.MMM"
+    level: "INFO"
+
+# ============================================================================
+# ANALYSIS CONFIGURATION
+# ============================================================================
+analysis:
+  # Contribution grid analysis parameters
+  contribution_grid:
+    start: 0
+    stop: 1.5
+    num: 12
+    absolute_xrange: true
+
+  # Baseline components configuration
+  # Specify which variables should be grouped as "baseline" in contribution plots
+  # Default: ['intercept', 'seasonality']
+  # You can add other components like 'trend' if you have trend variables in controls
+  baseline_components:
+    - "intercept"
+    - "seasonality"
+    # - "trend"  # Uncomment to include trend in baseline
